@@ -332,7 +332,7 @@ const ScamShieldAnalyzer = () => {
         {result && (() => {
           const styles = getVerdictStyles(result.verdict);
           const VerdictIcon = styles.Icon;
-
+ 
           return (
             <>
               <div className="grid grid-cols-3 gap-8 mb-8">
