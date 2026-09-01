@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   LayoutDashboard, 
   ShieldAlert, 
@@ -6,14 +6,9 @@ import {
   Lightbulb, 
   Search, 
   Upload, 
-  MessageSquare, 
-  AlertTriangle, 
-  ExternalLink, 
-  Mail, 
   Zap,
   Send,
   User,
-  CheckCircle2,
   Loader2,
   ShieldCheck
 } from 'lucide-react';
@@ -30,26 +25,77 @@ interface AnalysisResult {
 }
 
 const ScamShieldAnalyzer = () => {
-  const [activeTab, setActiveTab] = useState('paste');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab] = useState<'paste' | 'upload'>('paste');
   const [inputValue, setInputValue] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Initial demo result state
-  const [result, setResult] = useState<AnalysisResult | null>({
-    verdict: 'SUSPICIOUS',
-    riskScore: 65,
-    confidence: '89%',
-    category: 'Phishing — Bank Impersonation',
-    reasoning: 'This message uses urgent language typical of bank scams to pressure you into clicking a link. It attempts to create a false sense of panic about your account status.',
-    redFlags: [
-      'Urgent call-to-action',
-      'Unrecognized sender address',
-      'Suspicious link structure'
-    ],
-    recommendation: 'Do not click on the link or provide any personal details. Verify directly with your bank.',
-    analyzedText: 'URGENT: Your account has been locked. Click here to verify: http://amazon-security-update-2024.xyz/login'
-  });
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    };
+  }, [imagePreviewUrl]);
+
+  const clearUploadState = () => {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setSelectedFile(null);
+    setImagePreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleTabChange = (tab: 'paste' | 'upload') => {
+    setActiveTab(tab);
+    setError(null);
+    if (tab === 'paste') clearUploadState();
+  };
+
+  const handleFileSelect = (file: File | null) => {
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(file.type)) {
+      setError('Only PNG, JPEG, and WebP images are supported.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image must be 5MB or smaller.');
+      return;
+    }
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setSelectedFile(file);
+    setImagePreviewUrl(URL.createObjectURL(file));
+    setInputValue('');
+    setError(null);
+  };
+
+  const runFallbackAnalysis = (message: string) => {
+    const text = message.toLowerCase();
+    const isHighRisk = /urgent|locked|verify|password|ssn|bank|gift card|otp|telegram|crypto|claim/i.test(text);
+    const isLegit = /meeting|thanks|hello|see you|dinner|project|call|schedule/i.test(text) && !isHighRisk;
+    const fallbackVerdict: AnalysisResult['verdict'] = isHighRisk ? 'SCAM' : (isLegit ? 'LEGITIMATE' : 'SUSPICIOUS');
+    const fallbackScore = isHighRisk ? 88 : (isLegit ? 12 : 60);
+
+    setResult({
+      verdict: fallbackVerdict,
+      riskScore: fallbackScore,
+      confidence: '92%',
+      category: isHighRisk ? 'Phishing — High Threat' : (isLegit ? 'Low Risk Message' : 'Potential Spam'),
+      reasoning: isHighRisk
+        ? 'Message contains high-risk trigger words asking for verification, urgency, or account action.'
+        : (isLegit
+          ? 'No high-risk scam patterns detected. Appears to be standard communication.'
+          : 'Contains generic content that requires user discretion.'),
+      redFlags: isHighRisk
+        ? ['Urgent call-to-action detected', 'Requests sensitive action or verification', 'Suspicious message intent']
+        : (isLegit ? ['No suspicious links found', 'Normal conversational tone'] : ['Unverified sender info']),
+      recommendation: isHighRisk ? 'Do not click links or share credentials.' : 'Safe to read.',
+      analyzedText: message,
+    });
+  };
+
+  const [result, setResult] = useState<AnalysisResult | null>(null);
 
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard', active: false },
@@ -131,19 +177,57 @@ const ScamShieldAnalyzer = () => {
   };
 
   const handleAnalyze = async () => {
-    if (!inputValue.trim()) return;
+    setError(null);
+    setResult(null);
+    let message = inputValue.trim();
+
+    if (activeTab === 'upload') {
+      if (!selectedFile) {
+        setError('Please upload a screenshot.');
+        return;
+      }
+
+      setExtracting(true);
+
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+
+        const ocrResponse = await fetch('/api/extract-text', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const ocrData = await ocrResponse.json();
+
+        if (!ocrResponse.ok || !ocrData.success || !ocrData.text?.trim()) {
+          const fallback =
+            ocrResponse.status === 429
+              ? 'Groq rate limit reached. Wait 20–30 seconds and try again.'
+              : 'Could not read text from this screenshot. Try cropping to just the message, or switch to Paste Message and type it manually.';
+          setError(ocrData.error ?? fallback);
+          return;
+        }
+
+        message = ocrData.text.trim();
+        setInputValue(message);
+      } catch {
+        setError('Failed to extract text from screenshot.');
+        return;
+      } finally {
+        setExtracting(false);
+      }
+    } else if (!message) {
+      return;
+    }
 
     setLoading(true);
-    setError(null);
 
     try {
-      // Call API route handler
       const response = await fetch('/api/check-scam', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message: inputValue.trim() }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
       });
 
       if (!response.ok) {
@@ -153,43 +237,23 @@ const ScamShieldAnalyzer = () => {
       const data = await response.json();
 
       if (data.success && data.analysis) {
-        const parsed = parseBackendAnalysis(data.analysis, inputValue);
-        setResult(parsed);
+        setResult(parseBackendAnalysis(data.analysis, message));
       } else {
-        // Fallback analysis if API succeeds with raw payload
-        setResult(parseBackendAnalysis(data.analysis || 'Verdict: SUSPICIOUS\nReasoning: Analysis processed.', inputValue));
+        setResult(parseBackendAnalysis(data.analysis || 'Verdict: SUSPICIOUS\nReasoning: Analysis processed.', message));
       }
-    } catch (err: any) {
-      console.warn('Backend API connection note:', err.message);
-      
-      // Fallback local heuristic analyzer so UI works even without backend running
-      const text = inputValue.toLowerCase();
-      const isHighRisk = /urgent|locked|verify|password|ssn|bank|gift card|otp|telegram|crypto|claim/i.test(text);
-      const isLegit = /meeting|thanks|hello|see you|dinner|project|call|schedule/i.test(text) && !isHighRisk;
-
-      const fallbackVerdict: 'SCAM' | 'SUSPICIOUS' | 'LEGITIMATE' = isHighRisk ? 'SCAM' : (isLegit ? 'LEGITIMATE' : 'SUSPICIOUS');
-      const fallbackScore = isHighRisk ? 88 : (isLegit ? 12 : 60);
-
-      setResult({
-        verdict: fallbackVerdict,
-        riskScore: fallbackScore,
-        confidence: '92%',
-        category: isHighRisk ? 'Phishing — High Threat' : (isLegit ? 'Low Risk Message' : 'Potential Spam'),
-        reasoning: isHighRisk 
-          ? 'Message contains high-risk trigger words asking for verification, urgency, or account action.'
-          : (isLegit 
-            ? 'No high-risk scam patterns detected. Appears to be standard communication.' 
-            : 'Contains generic content that requires user discretion.'),
-        redFlags: isHighRisk 
-          ? ['Urgent call-to-action detected', 'Requests sensitive action or verification', 'Suspicious message intent']
-          : (isLegit ? ['No suspicious links found', 'Normal conversational tone'] : ['Unverified sender info']),
-        recommendation: isHighRisk ? 'Do not click links or share credentials.' : 'Safe to read.',
-        analyzedText: inputValue
-      });
+    } catch (err: unknown) {
+      const errMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.warn('Backend API connection note:', errMessage);
+      runFallbackAnalysis(message);
     } finally {
       setLoading(false);
     }
   };
+
+  const isAnalyzeDisabled =
+    loading ||
+    extracting ||
+    (activeTab === 'paste' ? !inputValue.trim() : !selectedFile);
 
   const getVerdictStyles = (verdict: 'SCAM' | 'SUSPICIOUS' | 'LEGITIMATE') => {
     switch (verdict) {
@@ -276,7 +340,7 @@ const ScamShieldAnalyzer = () => {
         <section className="bg-white rounded-2xl shadow-sm border border-[#E6E8EF] overflow-hidden mb-8">
           <div className="flex border-b border-[#E6E8EF]">
             <button 
-              onClick={() => setActiveTab('paste')}
+              onClick={() => handleTabChange('paste')}
               className={`px-8 py-4 text-sm font-bold uppercase tracking-wider transition-all relative ${
                 activeTab === 'paste' ? 'text-[#2E347E]' : 'text-[#575C6B]'
               }`}
@@ -285,7 +349,7 @@ const ScamShieldAnalyzer = () => {
               {activeTab === 'paste' && <div className="absolute bottom-0 left-8 right-8 h-0.5 bg-[#2E347E]" />}
             </button>
             <button 
-              onClick={() => setActiveTab('upload')}
+              onClick={() => handleTabChange('upload')}
               className={`px-8 py-4 text-sm font-bold uppercase tracking-wider transition-all relative ${
                 activeTab === 'upload' ? 'text-[#2E347E]' : 'text-[#575C6B]'
               }`}
@@ -296,26 +360,76 @@ const ScamShieldAnalyzer = () => {
           </div>
           
           <div className="p-8">
-            <textarea 
-              className="w-full h-40 p-6 rounded-xl border border-[#E6E8EF] bg-[#F8F9FC] focus:outline-none focus:ring-2 focus:ring-[#2E347E]/20 focus:border-[#2E347E] transition-all resize-none font-sans text-sm"
-              placeholder="Paste suspicious text or links here..."
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
             />
+
+            {activeTab === 'paste' ? (
+              <textarea 
+                className="w-full h-40 p-6 rounded-xl border border-[#E6E8EF] bg-[#F8F9FC] focus:outline-none focus:ring-2 focus:ring-[#2E347E]/20 focus:border-[#2E347E] transition-all resize-none font-sans text-sm"
+                placeholder="Paste suspicious text or links here..."
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+              />
+            ) : (
+              <div className="space-y-4">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleFileSelect(e.dataTransfer.files?.[0] ?? null);
+                  }}
+                  className="flex flex-col items-center justify-center h-40 rounded-xl border-2 border-dashed border-[#E6E8EF] bg-[#F8F9FC] hover:border-[#2E347E]/40 hover:bg-[#F3F4FD] transition-all cursor-pointer"
+                >
+                  <Upload size={28} className="text-[#2E347E] mb-2" />
+                  <p className="text-sm font-semibold text-[#15171E]">Drop screenshot here or click to browse</p>
+                  <p className="text-xs text-[#575C6B] mt-1">PNG, JPEG, WebP — max 5MB</p>
+                </div>
+
+                {imagePreviewUrl && (
+                  <div className="rounded-xl border border-[#E6E8EF] overflow-hidden bg-[#F8F9FC] p-4">
+                    <img
+                      src={imagePreviewUrl}
+                      alt="Screenshot preview"
+                      className="max-h-48 mx-auto rounded-lg object-contain"
+                    />
+                  </div>
+                )}
+
+                {inputValue && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-[#575C6B] mb-2">Extracted text (editable)</p>
+                    <textarea
+                      className="w-full h-32 p-4 rounded-xl border border-[#E6E8EF] bg-white focus:outline-none focus:ring-2 focus:ring-[#2E347E]/20 focus:border-[#2E347E] transition-all resize-none font-sans text-sm"
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             {error && (
               <p className="mt-2 text-xs font-semibold text-red-600">{error}</p>
             )}
             <div className="mt-6 flex justify-end">
               <button 
                 onClick={handleAnalyze}
-      
-                disabled={loading || !inputValue.trim()}
+                disabled={isAnalyzeDisabled}
                 className="bg-[#2E347E] hover:bg-[#262B64] disabled:opacity-50 disabled:cursor-not-allowed text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
               >
-                {loading ? (
+                {loading || extracting ? (
                   <>
                     <Loader2 size={18} className="animate-spin" />
-                    Analyzing...
+                    {extracting ? 'Extracting text...' : 'Analyzing...'}
                   </>
                 ) : (
                   <>
