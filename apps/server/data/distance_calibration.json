@@ -1,0 +1,44 @@
+{
+  "method": "held-out exact nearest-neighbor L2 on normalized embeddings",
+  "seed": 42,
+  "training_spam_count": 514,
+  "validation_spam_count": 128,
+  "validation_ham_count": 4518,
+  "minimum_recall_target": 0.9,
+  "recommended": {
+    "threshold": 1.005,
+    "precision": 0.4021,
+    "recall": 0.9141,
+    "f1": 0.5585,
+    "true_positive": 117,
+    "false_positive": 174,
+    "true_negative": 4344,
+    "false_negative": 11
+  },
+  "best_f1": {
+    "threshold": 0.85,
+    "precision": 0.9375,
+    "recall": 0.7031,
+    "f1": 0.8036,
+    "true_positive": 90,
+    "false_positive": 6,
+    "true_negative": 4512,
+    "false_negative": 38
+  },
+  "distance_quantiles": {
+    "spam": {
+      "0.1": 0.1409,
+      "0.25": 0.3133,
+      "0.5": 0.7096,
+      "0.75": 0.8893,
+      "0.9": 0.9971
+    },
+    "ham": {
+      "0.1": 1.0464,
+      "0.25": 1.0942,
+      "0.5": 1.1436,
+      "0.75": 1.1898,
+      "0.9": 1.2289
+    }
+  }
+}
