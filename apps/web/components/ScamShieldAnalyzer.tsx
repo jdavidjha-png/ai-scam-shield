@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
+import AppSidebar from './AppSidebar';
 import { 
-  LayoutDashboard, 
   ShieldAlert, 
-  Lock, 
-  Lightbulb, 
   Search, 
   Upload, 
   MessageSquare, 
@@ -12,7 +10,6 @@ import {
   Mail, 
   Zap,
   Send,
-  User,
   CheckCircle2,
   Loader2,
   ShieldCheck
@@ -50,13 +47,6 @@ const ScamShieldAnalyzer = () => {
     recommendation: 'Do not click on the link or provide any personal details. Verify directly with your bank.',
     analyzedText: 'URGENT: Your account has been locked. Click here to verify: http://amazon-security-update-2024.xyz/login'
   });
-
-  const navItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', active: false },
-    { icon: ShieldAlert, label: 'Analyze Message', active: true },
-    { icon: Lock, label: 'Scam Vault', active: false },
-    { icon: Lightbulb, label: 'AI Advisor', active: false },
-  ];
 
   const parseBackendAnalysis = (rawText: string, originalMessage: string): AnalysisResult => {
     // Extract Verdict
@@ -230,41 +220,7 @@ const ScamShieldAnalyzer = () => {
   return (
     <div className="flex min-h-screen bg-[#F8F9FC] font-sans text-[#15171E]">
 
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-[#E6E8EF] flex flex-col fixed h-full z-10">
-        <div className="p-8">
-          <h1 className="text-2xl font-bold text-[#2E347E]">Scam Shield</h1>
-          <p className="text-xs text-[#575C6B] mt-1 uppercase tracking-wider font-semibold">Your Digital Sanctuary</p>
-        </div>
-
-        <nav className="flex-1 px-4 space-y-1">
-          {navItems.map((item) => (
-            <button
-              key={item.label}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                item.active 
-                  ? 'bg-[#F3F4FD] text-[#2E347E] font-bold shadow-sm' 
-                  : 'text-[#575C6B] hover:bg-[#F8F9FC] hover:text-[#15171E]'
-              }`}
-            >
-              <item.icon size={20} />
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
-
-        <div className="p-6 mt-auto border-t border-[#E6E8EF]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#F3F4FD] flex items-center justify-center text-[#2E347E]">
-              <User size={20} />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-[#15171E]">Demo User</p>
-              <p className="text-xs text-[#575C6B]">Profile</p>
-            </div>
-          </div>
-        </div>
-      </aside>
+      <AppSidebar activeHref="/" />
 
       {/* Main Content */}
       <main className="flex-1 ml-64 p-12 max-w-6xl mx-auto">

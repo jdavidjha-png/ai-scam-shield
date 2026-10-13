@@ -2,17 +2,19 @@
 # pyrefly: disable
 # type: ignore
 
-import os
 from fastapi import FastAPI  # pyrefly: ignore [missing-import] # type: ignore
 from fastapi.middleware.cors import CORSMiddleware  # pyrefly: ignore [missing-import] # type: ignore
 from fastapi.responses import FileResponse  # pyrefly: ignore [missing-import] # type: ignore
 from pydantic import BaseModel  # pyrefly: ignore [missing-import] # type: ignore
 from dotenv import load_dotenv  # pyrefly: ignore [missing-import] # type: ignore
-from openai import OpenAI  # pyrefly: ignore [missing-import] # type: ignore
+
+from routes.rag import router as rag_router
+from services.groq_client import DEFAULT_GROQ_MODEL, get_groq_client
 
 load_dotenv()
 
 app = FastAPI()
+app.include_router(rag_router)
 
 # Enable CORS
 app.add_middleware(
@@ -23,11 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize GROQ client
-client = OpenAI(
-    api_key=os.getenv("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1"
-)
+client = get_groq_client()
 
 
 class MessageRequest(BaseModel):
@@ -68,7 +66,7 @@ Provide your response in the following format:
 Be concise but thorough."""
 
         response = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
+            model=DEFAULT_GROQ_MODEL,
             messages=[
                 {
                     "role": "system",
