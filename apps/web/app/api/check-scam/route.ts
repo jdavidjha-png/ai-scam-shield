@@ -23,7 +23,7 @@ export async function POST(req: Request) {
         const data = await fastApiResponse.json();
         return NextResponse.json(data);
       }
-    } catch (e) {
+    } catch {
       console.log('FastAPI backend not running at port 8000, attempting Groq direct API call...');
     }
 
@@ -66,10 +66,11 @@ Provide your response in the following format:
 
     throw new Error('Groq API response error');
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({
       success: false,
-      error: error.message,
+      error: errorMsg,
       analysis: `Verdict: SUSPICIOUS\nConfidence: 85%\nReasoning: Message evaluated for common phishing/scam patterns.\nRed Flags: Urgent tone, Unverified request\nRecommendation: Verify sender credentials.`
     });
   }

@@ -98,7 +98,7 @@ Be concise but thorough.`;
       extractedText: 'Screenshot analyzed for visual & textual threat indicators.'
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Image route exception:', error);
     return NextResponse.json({
       success: true,

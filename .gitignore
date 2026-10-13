@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js
+.next/
+out/
+
+# Python virtual environments & bytecode
+.venv/
+apps/server/.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environment files & secrets
+.env
+.env*.local
+.env.local
+.env.production
+.env.development
+
+# OS Files
+.DS_Store
+Thumbs.db
