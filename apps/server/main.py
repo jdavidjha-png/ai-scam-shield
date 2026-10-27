@@ -178,6 +178,7 @@ def check_scam(request: MessageRequest):
 @app.post("/document-qa")
 @app.post("/qa")
 def document_qa(request: QARequest):
+
     try:
         results = search_knowledge(request.question, limit=request.limit)
 
