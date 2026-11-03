@@ -1,20 +1,21 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from dotenv import load_dotenv
 
-# pyrefly: disable
-# type: ignore
+from services.detector import (
+    search_knowledge,
+    generate_answer,
+    answer_document_qa,
+)
+from services.db import get_db_connection
 
-import os
-from fastapi import FastAPI  # pyrefly: ignore [missing-import] # type: ignore
-from fastapi.middleware.cors import CORSMiddleware  # pyrefly: ignore [missing-import] # type: ignore
-from fastapi.responses import FileResponse  # pyrefly: ignore [missing-import] # type: ignore
-from pydantic import BaseModel  # pyrefly: ignore [missing-import] # type: ignore
-from dotenv import load_dotenv  # pyrefly: ignore [missing-import] # type: ignore
-from openai import OpenAI  # pyrefly: ignore [missing-import] # type: ignore
-
+# Load environment variables
 load_dotenv()
 
-app = FastAPI()
+app = FastAPI(title="AI Scam Shield API")
 
-# Enable CORS
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,72 +24,53 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize GROQ client
-client = OpenAI(
-    api_key=os.getenv("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1"
-)
 
-
+# Request models
 class MessageRequest(BaseModel):
     message: str
 
 
+class QARequest(BaseModel):
+    question: str
+    limit: int = 3
+
+
 @app.get("/")
 def home():
-    return FileResponse("../web/components/ScamShieldAnalyzer.tsx")
+    return {
+        "message": "AI Scam Shield API is running"
+    }
 
 
 @app.post("/check-scam")
 def check_scam(request: MessageRequest):
     try:
-        # Create a detailed prompt for scam detection
-        prompt = f"""You are a scam detection expert. Analyze the following message and determine if it's a scam or legitimate.
-
-Message to analyze:
-"{request.message}"
-
-Analyze this message for common scam indicators such as:
-- Urgency or pressure tactics
-- Requests for personal information, passwords, or financial details
-- Too-good-to-be-true offers
-- Poor grammar or spelling
-- Suspicious links or phone numbers
-- Impersonation of official entities
-- Requests for money transfers or gift cards
-- Threatening language
-
-Provide your response in the following format:
-1. Verdict: [SCAM/LEGITIMATE/SUSPICIOUS]
-2. Confidence: [percentage]
-3. Reasoning: [brief explanation]
-4. Red Flags: [list key warning signs if any]
-5. Recommendation: [what the user should do]
-
-Be concise but thorough."""
-
-        response = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert at detecting scams, phishing attempts, and fraudulent messages. You provide clear, accurate assessments to help people stay safe."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.3  # Lower temperature for more consistent analysis
-        )
-
+        answer = generate_answer(request.message)
         return {
             "success": True,
-            "analysis": response.choices[0].message.content
+            "analysis": answer
         }
     except Exception as e:
         return {
             "success": False,
             "error": str(e),
             "analysis": "Unable to analyze the message. Please try again."
+        }
+
+
+@app.post("/document-qa")
+@app.post("/qa")
+def document_qa(request: QARequest):
+    try:
+        qa_result = answer_document_qa(request.question, limit=request.limit)
+        return {
+            "success": True,
+            "answer": qa_result["answer"],
+            "sources": qa_result["sources"]
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "answer": "Unable to generate answer. Please try again."
         }
